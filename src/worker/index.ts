@@ -1,5 +1,5 @@
 import { Hono } from "hono";
 
-const app = new Hono<{ Bindings: Env }>();
+const app = new Hono<{}>();
 
 export default app;
