@@ -1,0 +1,7 @@
+npm run build                  # refresh dist/client
+git add -f dist/client
+git commit -m "Build for gh-pages"   # temporary build commit
+git subtree split --prefix dist/client -b gh-pages-tmp
+git push -f origin gh-pages-tmp:gh-pages
+git branch -D gh-pages-tmp
+git reset --soft HEAD~1
