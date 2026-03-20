@@ -8,3 +8,6 @@ To run the devserver:
 npm install
 npm run dev
 ```
+
+Local development runs at `/`.
+Production builds use `/groups-calendar/` via `.env.production`, which keeps GitHub Pages deployments working.
