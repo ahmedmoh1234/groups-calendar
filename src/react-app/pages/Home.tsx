@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
 // Reference date: November 23, 2025 is the starting point
@@ -13,8 +13,41 @@ const PATTERN = [
   ["B", "A", "A", "B", "B"], // Week 3
 ];
 
+const MONTHLY_OFFICE_TARGET = 10;
+const ATTENDANCE_STORAGE_KEY = "office-attendance-days";
+
+const getDateKey = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const loadAttendance = () => {
+  if (typeof window === "undefined") {
+    return {} as Record<string, boolean>;
+  }
+
+  try {
+    const stored = window.localStorage.getItem(ATTENDANCE_STORAGE_KEY);
+
+    if (!stored) {
+      return {} as Record<string, boolean>;
+    }
+
+    const parsed = JSON.parse(stored);
+
+    return typeof parsed === "object" && parsed !== null ? parsed : {};
+  } catch {
+    return {} as Record<string, boolean>;
+  }
+};
+
 export default function HomePage() {
   const [currentDate, setCurrentDate] = useState(new Date());
+  const [attendance, setAttendance] = useState<Record<string, boolean>>(() =>
+    loadAttendance()
+  );
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -61,6 +94,49 @@ export default function HomePage() {
     setCurrentDate(new Date());
   };
 
+  useEffect(() => {
+    window.localStorage.setItem(
+      ATTENDANCE_STORAGE_KEY,
+      JSON.stringify(attendance)
+    );
+  }, [attendance]);
+
+  const isSelectableDay = (date: Date) => {
+    const dayOfWeek = date.getDay();
+    return dayOfWeek !== 5 && dayOfWeek !== 6;
+  };
+
+  const toggleAttendance = (date: Date) => {
+    if (!isSelectableDay(date)) {
+      return;
+    }
+
+    const key = getDateKey(date);
+
+    setAttendance((currentAttendance) => {
+      if (currentAttendance[key]) {
+        const nextAttendance = { ...currentAttendance };
+        delete nextAttendance[key];
+        return nextAttendance;
+      }
+
+      return {
+        ...currentAttendance,
+        [key]: true,
+      };
+    });
+  };
+
+  const attendedDaysThisMonth = Object.keys(attendance).filter((dateKey) => {
+    const [entryYear, entryMonth] = dateKey.split("-");
+    return Number(entryYear) === year && Number(entryMonth) === month + 1;
+  }).length;
+
+  const remainingOfficeDays = Math.max(
+    0,
+    MONTHLY_OFFICE_TARGET - attendedDaysThisMonth
+  );
+
   // Build calendar grid
   const calendarDays = [];
   
@@ -72,8 +148,11 @@ export default function HomePage() {
   // Add days of the month
   for (let day = 1; day <= daysInMonth; day++) {
     const date = new Date(year, month, day);
+    const dateKey = getDateKey(date);
     const group = getGroup(date);
     const dayOfWeek = date.getDay();
+    const isSelectable = isSelectableDay(date);
+    const isAttended = Boolean(attendance[dateKey]);
     const isToday = 
       date.getDate() === new Date().getDate() &&
       date.getMonth() === new Date().getMonth() &&
@@ -81,6 +160,7 @@ export default function HomePage() {
 
     let bgColor = "bg-gray-50";
     let textColor = "text-gray-900";
+    let borderColor = "border-transparent";
     
     if (dayOfWeek === 5 || dayOfWeek === 6) {
       // Weekends - gray
@@ -94,20 +174,46 @@ export default function HomePage() {
       textColor = "text-blue-900";
     }
 
+    if (isAttended) {
+      borderColor = "border-emerald-500";
+      bgColor =
+        group === "A"
+          ? "bg-red-200 hover:bg-red-300"
+          : "bg-blue-200 hover:bg-blue-300";
+    }
+
     calendarDays.push(
-      <div
+      <button
+        type="button"
         key={day}
-        className={`aspect-square p-2 rounded-lg transition-all ${bgColor} ${
-          isToday ? "ring-2 ring-gray-900 ring-offset-2" : ""
-        }`}
+        onClick={() => toggleAttendance(date)}
+        disabled={!isSelectable}
+        aria-pressed={isAttended}
+        className={`aspect-square rounded-lg border-2 p-2 text-left transition-all ${bgColor} ${textColor} ${borderColor} ${
+          isSelectable ? "cursor-pointer" : "cursor-not-allowed"
+        } ${isToday ? "ring-2 ring-gray-900 ring-offset-2" : ""}`}
       >
-        <div className={`text-sm font-medium ${textColor}`}>{day}</div>
-        {group && (
-          <div className={`text-xs mt-1 font-semibold ${textColor}`}>
-            Group {group}
+        <div className="flex h-full flex-col">
+          <div className="flex items-start justify-between gap-2">
+            <div className="text-sm font-medium">{day}</div>
+            {isAttended && (
+              <span className="rounded-full bg-white/80 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-gray-800">
+                Attended
+              </span>
+            )}
           </div>
-        )}
-      </div>
+        {group && (
+            <div className="mt-1 text-xs font-semibold">Group {group}</div>
+          )}
+          <div className="mt-auto pt-2 text-[11px] font-medium text-gray-600">
+            {isSelectable
+              ? isAttended
+                ? "Office day saved"
+                : "Click to mark office"
+              : "Weekend"}
+          </div>
+        </div>
+      </button>
     );
   }
 
@@ -128,6 +234,33 @@ export default function HomePage() {
 
         {/* Calendar Card */}
         <div className="bg-white rounded-2xl shadow-xl p-8">
+          <div className="mb-8 grid gap-4 md:grid-cols-3">
+            <div className="rounded-2xl bg-emerald-50 p-5">
+              <p className="text-sm font-semibold uppercase tracking-wide text-emerald-700">
+                Monthly goal
+              </p>
+              <p className="mt-2 text-3xl font-bold text-emerald-950">
+                {MONTHLY_OFFICE_TARGET} days
+              </p>
+            </div>
+            <div className="rounded-2xl bg-slate-100 p-5">
+              <p className="text-sm font-semibold uppercase tracking-wide text-slate-600">
+                Attended
+              </p>
+              <p className="mt-2 text-3xl font-bold text-slate-900">
+                {attendedDaysThisMonth}
+              </p>
+            </div>
+            <div className="rounded-2xl bg-amber-100 p-5">
+              <p className="text-sm font-semibold uppercase tracking-wide text-amber-700">
+                Remaining this month
+              </p>
+              <p className="mt-2 text-3xl font-bold text-amber-950">
+                {remainingOfficeDays}
+              </p>
+            </div>
+          </div>
+
           {/* Month Navigation */}
           <div className="flex items-center justify-between mb-8">
             <button
@@ -193,8 +326,17 @@ export default function HomePage() {
                   Weekend (ignored)
                 </span>
               </div>
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 bg-white rounded border-2 border-emerald-500" />
+                <span className="text-sm font-medium text-gray-700">
+                  Marked attended
+                </span>
+              </div>
             </div>
             <p className="text-xs text-gray-500 text-center mt-4">
+              Click Sunday-Thursday to save office attendance in this browser. The 10-day target resets automatically each month.
+            </p>
+            <p className="text-xs text-gray-500 text-center mt-2">
               Reference date: November 23, 2025 • Pattern repeats every 4 weeks
             </p>
           </div>
