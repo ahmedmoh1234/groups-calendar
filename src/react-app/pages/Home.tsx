@@ -112,6 +112,24 @@ export default function HomePage() {
     }
 
     const key = getDateKey(date);
+    const isCurrentlyAttended = Boolean(attendance[key]);
+
+    if (isCurrentlyAttended) {
+      const formattedDate = date.toLocaleDateString("default", {
+        weekday: "long",
+        month: "long",
+        day: "numeric",
+        year: "numeric",
+      });
+
+      const shouldRemove = window.confirm(
+        `Remove attendance for ${formattedDate}?`
+      );
+
+      if (!shouldRemove) {
+        return;
+      }
+    }
 
     setAttendance((currentAttendance) => {
       if (currentAttendance[key]) {
