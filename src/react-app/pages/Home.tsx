@@ -319,27 +319,27 @@ export default function HomePage() {
 
           {/* Legend */}
           <div className="mt-8 pt-6 border-t border-gray-200">
-            <div className="flex items-center justify-center gap-8">
-              <div className="flex items-center gap-2">
-                <div className="w-6 h-6 bg-red-100 rounded border-2 border-red-300" />
+            <div className="grid grid-cols-2 gap-3 sm:flex sm:flex-wrap sm:items-center sm:justify-center sm:gap-6">
+              <div className="flex min-w-0 items-center gap-2">
+                <div className="h-6 w-6 shrink-0 rounded border-2 border-red-300 bg-red-100" />
                 <span className="text-sm font-medium text-gray-700">
                   Group A
                 </span>
               </div>
-              <div className="flex items-center gap-2">
-                <div className="w-6 h-6 bg-blue-100 rounded border-2 border-blue-300" />
+              <div className="flex min-w-0 items-center gap-2">
+                <div className="h-6 w-6 shrink-0 rounded border-2 border-blue-300 bg-blue-100" />
                 <span className="text-sm font-medium text-gray-700">
                   Group B
                 </span>
               </div>
-              <div className="flex items-center gap-2">
-                <div className="w-6 h-6 bg-gray-200 rounded border-2 border-gray-400" />
+              <div className="flex min-w-0 items-center gap-2">
+                <div className="h-6 w-6 shrink-0 rounded border-2 border-gray-400 bg-gray-200" />
                 <span className="text-sm font-medium text-gray-700">
                   Weekend (ignored)
                 </span>
               </div>
-              <div className="flex items-center gap-2">
-                <div className="w-6 h-6 bg-white rounded border-2 border-emerald-500" />
+              <div className="flex min-w-0 items-center gap-2">
+                <div className="h-6 w-6 shrink-0 rounded border-2 border-emerald-500 bg-white" />
                 <span className="text-sm font-medium text-gray-700">
                   Marked attended
                 </span>
