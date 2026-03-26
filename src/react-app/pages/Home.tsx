@@ -182,6 +182,17 @@ export default function HomePage() {
           : "bg-blue-200 hover:bg-blue-300";
     }
 
+    const ariaLabel = [
+      date.toLocaleDateString("default", {
+        weekday: "long",
+        month: "long",
+        day: "numeric",
+        year: "numeric",
+      }),
+      group ? `Group ${group}` : "Weekend",
+      isAttended ? "Marked attended" : isSelectable ? "Office day" : "Not selectable",
+    ].join(", ");
+
     calendarDays.push(
       <button
         type="button"
@@ -189,6 +200,7 @@ export default function HomePage() {
         onClick={() => toggleAttendance(date)}
         disabled={!isSelectable}
         aria-pressed={isAttended}
+        aria-label={ariaLabel}
         className={`aspect-square rounded-lg border-2 p-2 text-left transition-all ${bgColor} ${textColor} ${borderColor} ${
           isSelectable ? "cursor-pointer" : "cursor-not-allowed"
         } ${isToday ? "ring-2 ring-gray-900 ring-offset-2" : ""}`}
@@ -197,21 +209,21 @@ export default function HomePage() {
           <div className="flex items-start justify-between gap-2">
             <div className="text-sm font-medium">{day}</div>
             {isAttended && (
-              <span className="rounded-full bg-white/80 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-gray-800">
+              <span className="hidden rounded-full bg-white/80 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-gray-800 lg:inline-flex">
                 Attended
               </span>
             )}
           </div>
-        {group && (
-            <div className="mt-1 text-xs font-semibold">Group {group}</div>
+          {group && (
+            <div className="mt-1 hidden text-xs font-semibold lg:block">
+              Group {group}
+            </div>
           )}
-          <div className="mt-auto pt-2 text-[11px] font-medium text-gray-600">
-            {isSelectable
-              ? isAttended
-                ? "Office day saved"
-                : "Click to mark office"
-              : "Weekend"}
-          </div>
+          {!isSelectable && (
+            <div className="mt-auto hidden pt-2 text-[11px] font-medium text-gray-600 lg:block">
+              Weekend
+            </div>
+          )}
         </div>
       </button>
     );
