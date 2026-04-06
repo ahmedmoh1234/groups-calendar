@@ -1,5 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  HolidayFeedSchema,
+  type HolidayEntry,
+  type HolidayFeed,
+} from "@/shared/types";
 
 // Reference date: November 23, 2025 is the starting point
 const REFERENCE_DATE = new Date(2025, 10, 23); // Month is 0-indexed
@@ -15,6 +20,8 @@ const PATTERN = [
 
 const MONTHLY_OFFICE_TARGET = 10;
 const ATTENDANCE_STORAGE_KEY = "office-attendance-days";
+const HOLIDAY_FEED_URL = `${import.meta.env.BASE_URL}holidays.json`;
+const CAIRO_TIME_OFFSET_MS = 2 * 60 * 60 * 1000;
 
 const getDateKey = (date: Date) => {
   const year = date.getFullYear();
@@ -43,14 +50,58 @@ const loadAttendance = () => {
   }
 };
 
+const formatHolidayUpdate = (value: string | null) => {
+  if (!value) {
+    return "Waiting for holiday feed";
+  }
+
+  const parsedDate = new Date(value);
+
+  if (Number.isNaN(parsedDate.getTime())) {
+    return "Holiday feed date unavailable";
+  }
+
+  const cairoDate = new Date(parsedDate.getTime() + CAIRO_TIME_OFFSET_MS);
+
+  return `${cairoDate.toLocaleString("en-US", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: "UTC",
+  })} UTC+2`;
+};
+
 export default function HomePage() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [attendance, setAttendance] = useState<Record<string, boolean>>(() =>
     loadAttendance()
   );
+  const [holidayFeed, setHolidayFeed] = useState<HolidayFeed | null>(null);
+  const [isHolidayFeedLoading, setIsHolidayFeedLoading] = useState(true);
+  const [holidayFeedError, setHolidayFeedError] = useState<string | null>(null);
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
+
+  const holidaysByDate = useMemo<Record<string, HolidayEntry[]>>(() => {
+    return (holidayFeed?.holidays ?? []).reduce<Record<string, HolidayEntry[]>>(
+      (lookup, holiday) => {
+        if (!lookup[holiday.date]) {
+          lookup[holiday.date] = [];
+        }
+
+        lookup[holiday.date].push(holiday);
+        return lookup;
+      },
+      {}
+    );
+  }, [holidayFeed]);
+
+  const holidayFeedUpdatedLabel = useMemo(
+    () => formatHolidayUpdate(holidayFeed?.last_updated ?? null),
+    [holidayFeed?.last_updated]
+  );
+
+  const holidayDaysLoaded = holidayFeed?.holidays.length ?? 0;
 
   // Get first day of month and number of days
   const firstDay = new Date(year, month, 1);
@@ -100,6 +151,49 @@ export default function HomePage() {
       JSON.stringify(attendance)
     );
   }, [attendance]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    const loadHolidayFeed = async () => {
+      try {
+        setIsHolidayFeedLoading(true);
+        setHolidayFeedError(null);
+
+        const response = await fetch(HOLIDAY_FEED_URL, {
+          signal: controller.signal,
+          cache: "no-store",
+        });
+
+        if (!response.ok) {
+          throw new Error(`Holiday feed request failed with ${response.status}`);
+        }
+
+        const payload = HolidayFeedSchema.parse(await response.json());
+        setHolidayFeed(payload);
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") {
+          return;
+        }
+
+        setHolidayFeedError(
+          error instanceof Error
+            ? error.message
+            : "Holiday feed could not be loaded."
+        );
+      } finally {
+        if (!controller.signal.aborted) {
+          setIsHolidayFeedLoading(false);
+        }
+      }
+    };
+
+    void loadHolidayFeed();
+
+    return () => {
+      controller.abort();
+    };
+  }, []);
 
   const isSelectableDay = (date: Date) => {
     const dayOfWeek = date.getDay();
@@ -168,6 +262,9 @@ export default function HomePage() {
     const date = new Date(year, month, day);
     const dateKey = getDateKey(date);
     const group = getGroup(date);
+    const holidays = holidaysByDate[dateKey] ?? [];
+    const holidayNames = holidays.map((holiday) => holiday.name).join(" • ");
+    const isHoliday = holidays.length > 0;
     const dayOfWeek = date.getDay();
     const isSelectable = isSelectableDay(date);
     const isAttended = Boolean(attendance[dateKey]);
@@ -180,7 +277,11 @@ export default function HomePage() {
     let textColor = "text-gray-900";
     let borderColor = "border-transparent";
     
-    if (dayOfWeek === 5 || dayOfWeek === 6) {
+    if (isHoliday) {
+      bgColor = "bg-amber-100 hover:bg-amber-200";
+      textColor = "text-amber-950";
+      borderColor = "border-amber-300";
+    } else if (dayOfWeek === 5 || dayOfWeek === 6) {
       // Weekends - gray
       bgColor = "bg-gray-200";
       textColor = "text-gray-500";
@@ -195,7 +296,9 @@ export default function HomePage() {
     if (isAttended) {
       borderColor = "border-emerald-500";
       bgColor =
-        group === "A"
+        isHoliday
+          ? "bg-amber-200 hover:bg-amber-300"
+          : group === "A"
           ? "bg-red-200 hover:bg-red-300"
           : "bg-blue-200 hover:bg-blue-300";
     }
@@ -207,9 +310,16 @@ export default function HomePage() {
         day: "numeric",
         year: "numeric",
       }),
+      isHoliday ? `Holiday: ${holidayNames}` : null,
       group ? `Group ${group}` : "Weekend",
-      isAttended ? "Marked attended" : isSelectable ? "Office day" : "Not selectable",
-    ].join(", ");
+      isAttended
+        ? "Marked attended"
+        : isSelectable
+          ? "Selectable day"
+          : "Not selectable",
+    ]
+      .filter(Boolean)
+      .join(", ");
 
     calendarDays.push(
       <button
@@ -219,33 +329,51 @@ export default function HomePage() {
         disabled={!isSelectable}
         aria-pressed={isAttended}
         aria-label={ariaLabel}
+        title={isHoliday ? holidayNames : undefined}
         className={`aspect-square rounded-lg border-2 p-2 text-left transition-all ${bgColor} ${textColor} ${borderColor} ${
           isSelectable ? "cursor-pointer" : "cursor-not-allowed"
         } ${isToday ? "ring-2 ring-gray-900 ring-offset-2" : ""}`}
       >
-        <div className="flex h-full flex-col">
-          <div className="flex items-start justify-between gap-2">
-            <div className="text-sm font-medium">{day}</div>
-            {isAttended && (
-              <span className="hidden rounded-full bg-white/80 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-gray-800 lg:inline-flex">
-                Attended
-              </span>
+          <div className="flex h-full flex-col">
+            <div className="flex items-start justify-between gap-2">
+              <div className="text-sm font-medium">{day}</div>
+              <div className="flex flex-wrap items-center justify-end gap-1">
+                {isHoliday && (
+                  <span className="hidden rounded-full bg-white/90 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-900 lg:inline-flex">
+                    Holiday
+                  </span>
+                )}
+                {isAttended && (
+                  <span className="hidden rounded-full bg-white/80 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-gray-800 lg:inline-flex">
+                    Attended
+                  </span>
+                )}
+              </div>
+            </div>
+            {isHoliday && (
+              <div className="mt-2 hidden text-[11px] font-semibold leading-4 text-amber-950 lg:block">
+                {holidayNames}
+              </div>
+            )}
+            {group && (
+              <div className="mt-1 hidden text-xs font-semibold lg:block">
+                Group {group}
+              </div>
+            )}
+            {!isSelectable && !isHoliday && (
+              <div className="mt-auto hidden pt-2 text-[11px] font-medium text-gray-600 lg:block">
+                Weekend
+              </div>
+            )}
+            {isHoliday && (
+              <div className="mt-auto hidden pt-2 text-[11px] font-medium text-amber-800 lg:block">
+                Holiday
+              </div>
             )}
           </div>
-          {group && (
-            <div className="mt-1 hidden text-xs font-semibold lg:block">
-              Group {group}
-            </div>
-          )}
-          {!isSelectable && (
-            <div className="mt-auto hidden pt-2 text-[11px] font-medium text-gray-600 lg:block">
-              Weekend
-            </div>
-          )}
-        </div>
-      </button>
-    );
-  }
+        </button>
+      );
+    }
 
   const monthName = firstDay.toLocaleString("default", { month: "long" });
 
@@ -264,7 +392,7 @@ export default function HomePage() {
 
         {/* Calendar Card */}
         <div className="bg-white rounded-2xl shadow-xl p-8">
-          <div className="mb-8 grid gap-4 md:grid-cols-3">
+          <div className="mb-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <div className="rounded-2xl bg-emerald-50 p-5">
               <p className="text-sm font-semibold uppercase tracking-wide text-emerald-700">
                 Monthly goal
@@ -288,6 +416,26 @@ export default function HomePage() {
               <p className="mt-2 text-3xl font-bold text-amber-950">
                 {remainingOfficeDays}
               </p>
+            </div>
+            <div className="rounded-2xl bg-stone-100 p-5">
+              <p className="text-sm font-semibold uppercase tracking-wide text-stone-600">
+                Holiday feed
+              </p>
+              <p className="mt-2 text-base font-semibold text-stone-900">
+                {isHolidayFeedLoading
+                  ? "Refreshing..."
+                  : holidayFeedError
+                    ? "Unavailable"
+                    : `${holidayDaysLoaded} days loaded`}
+              </p>
+              <p className="mt-2 text-sm leading-6 text-stone-600">
+                Last holiday update: {holidayFeedUpdatedLabel}
+              </p>
+              {holidayFeedError && (
+                <p className="mt-2 text-xs font-medium text-rose-700">
+                  {holidayFeedError}
+                </p>
+              )}
             </div>
           </div>
 
@@ -357,6 +505,12 @@ export default function HomePage() {
                 </span>
               </div>
               <div className="flex min-w-0 items-center gap-2">
+                <div className="h-6 w-6 shrink-0 rounded border-2 border-amber-300 bg-amber-100" />
+                <span className="text-sm font-medium text-gray-700">
+                  Holiday
+                </span>
+              </div>
+              <div className="flex min-w-0 items-center gap-2">
                 <div className="h-6 w-6 shrink-0 rounded border-2 border-emerald-500 bg-white" />
                 <span className="text-sm font-medium text-gray-700">
                   Marked attended
@@ -364,10 +518,13 @@ export default function HomePage() {
               </div>
             </div>
             <p className="text-xs text-gray-500 text-center mt-4">
-              Click Sunday-Thursday to save office attendance in this browser. The 10-day target resets automatically each month.
+              Click Sunday-Thursday and weekday holiday dates to save office attendance in this browser. The 10-day target resets automatically each month.
             </p>
             <p className="text-xs text-gray-500 text-center mt-2">
               Reference date: November 23, 2025 • Pattern repeats every 4 weeks
+            </p>
+            <p className="text-xs text-gray-500 text-center mt-2">
+              Holiday data loads from the daily `gh-pages` feed.
             </p>
           </div>
         </div>

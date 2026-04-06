@@ -1,15 +1,15 @@
 import z from "zod";
 
-/**
- * Types shared between the client and server go here.
- *
- * For example, we can add zod schemas for API input validation, and derive types from them:
- *
- * export const TodoSchema = z.object({
- *   id: z.number(),
- *   name: z.string(),
- *   completed: z.number().int(), // 0 or 1
- * })
- *
- * export type TodoType = z.infer<typeof TodoSchema>;
- */
+export const HolidayEntrySchema = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  name: z.string().min(1),
+  source_text: z.string().min(1),
+});
+
+export const HolidayFeedSchema = z.object({
+  last_updated: z.string().datetime({ offset: true }),
+  holidays: z.array(HolidayEntrySchema),
+});
+
+export type HolidayEntry = z.infer<typeof HolidayEntrySchema>;
+export type HolidayFeed = z.infer<typeof HolidayFeedSchema>;

@@ -12,6 +12,7 @@ from bs4 import BeautifulSoup
 
 DEFAULT_URL = "https://www.presidency.eg/ar/%D9%85%D8%B5%D8%B1/%D8%A7%D9%84%D8%B9%D8%B7%D9%84%D8%A7%D8%AA-%D8%A7%D9%84%D8%B1%D8%B3%D9%85%D9%8A%D8%A9/"
 DEFAULT_OUTPUT = Path(__file__).with_name("holidays.json")
+CAIRO_OFFSET = timezone(timedelta(hours=2))
 
 ARABIC_DIGITS = str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789")
 MONTHS = {
@@ -273,10 +274,7 @@ def parse_holidays(url: str) -> list[dict[str, str]]:
 
 def write_output(entries: list[dict[str, str]], output_path: Path) -> None:
     payload = {
-        "last_updated": datetime.now(timezone.utc)
-        .replace(microsecond=0)
-        .isoformat()
-        .replace("+00:00", "Z"),
+        "last_updated": datetime.now(CAIRO_OFFSET).replace(microsecond=0).isoformat(),
         "holidays": entries,
     }
 

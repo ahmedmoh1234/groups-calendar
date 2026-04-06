@@ -27,19 +27,27 @@ jobs:
       - name: Install scraper dependencies
         run: python -m pip install -r scripts/presidency_holidays/requirements.txt
 
-      - name: Regenerate holidays JSON
-        run: python scripts/presidency_holidays/fetch_holidays.py
+      - name: Generate deployed holidays JSON
+        run: python scripts/presidency_holidays/fetch_holidays.py --output public/holidays.json
 
-      - name: Commit and push updated JSON
-        run: |
-          git add scripts/presidency_holidays/holidays.json
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
 
-          if git diff --cached --quiet; then
-            echo "No changes to commit."
-            exit 0
-          fi
+      - name: Install app dependencies
+        run: npm ci
 
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -m "chore: refresh holidays json"
-          git push
+      - name: Build site
+        run: npm run build
+
+      - name: Publish site to gh-pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: gh-pages
+          publish_dir: ./dist/client
+          user_name: github-actions[bot]
+          user_email: 41898282+github-actions[bot]@users.noreply.github.com
+          commit_message: "chore: refresh deployed holidays feed"

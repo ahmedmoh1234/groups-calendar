@@ -10,7 +10,7 @@ It:
 - parses holiday names and Arabic date text
 - converts dates to ISO `YYYY-MM-DD`
 - expands date ranges into one JSON entry per day
-- adds a UTC `last_updated` timestamp to the output
+- adds a `last_updated` timestamp in UTC+2 (Cairo time)
 
 ## Setup
 
@@ -30,7 +30,7 @@ The output shape is:
 
 ```json
 {
-  "last_updated": "2026-04-07T12:34:56Z",
+  "last_updated": "2026-04-07T12:34:56+02:00",
   "holidays": [
     {
       "date": "2026-01-07",
@@ -51,7 +51,8 @@ python scripts/presidency_holidays/fetch_holidays.py --output scripts/presidency
 
 GitHub Actions can refresh the JSON automatically with `.github/workflows/refresh-holidays.yml`.
 
-- runs every day at `06:00` UTC
+- runs every day at `08:00` UTC+2 (Cairo time)
 - can also be started manually with `workflow_dispatch`
-- regenerates `scripts/presidency_holidays/holidays.json`
-- commits the updated JSON back to the repository
+- regenerates `public/holidays.json`
+- builds the app with that fresh feed
+- publishes the result to the `gh-pages` branch
