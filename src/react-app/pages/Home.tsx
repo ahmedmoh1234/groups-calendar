@@ -244,9 +244,35 @@ export default function HomePage() {
     return Number(entryYear) === year && Number(entryMonth) === month + 1;
   }).length;
 
+  const weekdayHolidayCountThisMonth = Object.keys(holidaysByDate).filter(
+    (dateKey) => {
+      const [entryYear, entryMonth, entryDay] = dateKey.split("-");
+
+      if (
+        Number(entryYear) !== year ||
+        Number(entryMonth) !== month + 1
+      ) {
+        return false;
+      }
+
+      const dayOfWeek = new Date(
+        Number(entryYear),
+        Number(entryMonth) - 1,
+        Number(entryDay)
+      ).getDay();
+
+      return dayOfWeek !== 5 && dayOfWeek !== 6;
+    }
+  ).length;
+
+  const adjustedMonthlyOfficeTarget = Math.max(
+    0,
+    MONTHLY_OFFICE_TARGET - weekdayHolidayCountThisMonth
+  );
+
   const remainingOfficeDays = Math.max(
     0,
-    MONTHLY_OFFICE_TARGET - attendedDaysThisMonth
+    adjustedMonthlyOfficeTarget - attendedDaysThisMonth
   );
 
   // Build calendar grid
@@ -398,7 +424,7 @@ export default function HomePage() {
                 Monthly goal
               </p>
               <p className="mt-2 text-3xl font-bold text-emerald-950">
-                {MONTHLY_OFFICE_TARGET} days
+                {adjustedMonthlyOfficeTarget} days
               </p>
             </div>
             <div className="rounded-2xl bg-slate-100 p-5">
@@ -518,7 +544,7 @@ export default function HomePage() {
               </div>
             </div>
             <p className="text-xs text-gray-500 text-center mt-4">
-              Click Sunday-Thursday and weekday holiday dates to save office attendance in this browser. The 10-day target resets automatically each month.
+              Click Sunday-Thursday and weekday holiday dates to save office attendance in this browser. The monthly target starts at 10 days and drops by 1 for each Sunday-Thursday holiday.
             </p>
             <p className="text-xs text-gray-500 text-center mt-2">
               Reference date: November 23, 2025 • Pattern repeats every 4 weeks
