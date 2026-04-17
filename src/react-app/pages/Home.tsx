@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Minus, Plus } from "lucide-react";
 import {
   HolidayFeedSchema,
   type HolidayEntry,
@@ -20,6 +20,7 @@ const PATTERN = [
 
 const MONTHLY_OFFICE_TARGET = 10;
 const ATTENDANCE_STORAGE_KEY = "office-attendance-days";
+const VACATION_STORAGE_KEY = "monthly-vacation-days";
 const HOLIDAY_FEED_URL = `${import.meta.env.BASE_URL}holidays.json`;
 const CAIRO_TIME_OFFSET_MS = 2 * 60 * 60 * 1000;
 
@@ -50,6 +51,39 @@ const loadAttendance = () => {
   }
 };
 
+const loadVacations = () => {
+  if (typeof window === "undefined") {
+    return {} as Record<string, number>;
+  }
+
+  try {
+    const stored = window.localStorage.getItem(VACATION_STORAGE_KEY);
+
+    if (!stored) {
+      return {} as Record<string, number>;
+    }
+
+    const parsed = JSON.parse(stored);
+
+    if (typeof parsed !== "object" || parsed === null) {
+      return {} as Record<string, number>;
+    }
+
+    return Object.entries(parsed).reduce<Record<string, number>>(
+      (vacations, [monthKey, value]) => {
+        if (typeof value === "number" && Number.isFinite(value) && value >= 0) {
+          vacations[monthKey] = Math.floor(value);
+        }
+
+        return vacations;
+      },
+      {}
+    );
+  } catch {
+    return {} as Record<string, number>;
+  }
+};
+
 const formatHolidayUpdate = (value: string | null) => {
   if (!value) {
     return "Waiting for holiday feed";
@@ -75,12 +109,16 @@ export default function HomePage() {
   const [attendance, setAttendance] = useState<Record<string, boolean>>(() =>
     loadAttendance()
   );
+  const [vacationsByMonth, setVacationsByMonth] = useState<
+    Record<string, number>
+  >(() => loadVacations());
   const [holidayFeed, setHolidayFeed] = useState<HolidayFeed | null>(null);
   const [isHolidayFeedLoading, setIsHolidayFeedLoading] = useState(true);
   const [holidayFeedError, setHolidayFeedError] = useState<string | null>(null);
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
+  const monthKey = `${year}-${String(month + 1).padStart(2, "0")}`;
 
   const holidaysByDate = useMemo<Record<string, HolidayEntry[]>>(() => {
     return (holidayFeed?.holidays ?? []).reduce<Record<string, HolidayEntry[]>>(
@@ -151,6 +189,13 @@ export default function HomePage() {
       JSON.stringify(attendance)
     );
   }, [attendance]);
+
+  useEffect(() => {
+    window.localStorage.setItem(
+      VACATION_STORAGE_KEY,
+      JSON.stringify(vacationsByMonth)
+    );
+  }, [vacationsByMonth]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -239,6 +284,23 @@ export default function HomePage() {
     });
   };
 
+  const updateVacationCount = (change: number) => {
+    setVacationsByMonth((currentVacations) => {
+      const nextCount = Math.max(0, (currentVacations[monthKey] ?? 0) + change);
+
+      if (nextCount === 0) {
+        const nextVacations = { ...currentVacations };
+        delete nextVacations[monthKey];
+        return nextVacations;
+      }
+
+      return {
+        ...currentVacations,
+        [monthKey]: nextCount,
+      };
+    });
+  };
+
   const attendedDaysThisMonth = Object.keys(attendance).filter((dateKey) => {
     const [entryYear, entryMonth] = dateKey.split("-");
     return Number(entryYear) === year && Number(entryMonth) === month + 1;
@@ -265,9 +327,11 @@ export default function HomePage() {
     }
   ).length;
 
+  const vacationsThisMonth = vacationsByMonth[monthKey] ?? 0;
+
   const adjustedMonthlyOfficeTarget = Math.max(
     0,
-    MONTHLY_OFFICE_TARGET - weekdayHolidayCountThisMonth
+    MONTHLY_OFFICE_TARGET - weekdayHolidayCountThisMonth - vacationsThisMonth
   );
 
   const remainingOfficeDays = Math.max(
@@ -426,6 +490,38 @@ export default function HomePage() {
               <p className="mt-2 text-3xl font-bold text-emerald-950">
                 {adjustedMonthlyOfficeTarget} days
               </p>
+              <div className="mt-4 flex items-center justify-between gap-3 rounded-xl bg-white/70 px-3 py-2">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">
+                    Vacations
+                  </p>
+                  <p className="text-sm font-medium text-emerald-950">
+                    Deducted this month
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => updateVacationCount(-1)}
+                    disabled={vacationsThisMonth === 0}
+                    aria-label="Decrease vacation days"
+                    className="flex h-9 w-9 items-center justify-center rounded-full border border-emerald-200 bg-white text-emerald-900 transition-colors hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <Minus className="h-4 w-4" />
+                  </button>
+                  <div className="min-w-10 text-center text-lg font-bold text-emerald-950">
+                    {vacationsThisMonth}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => updateVacationCount(1)}
+                    aria-label="Increase vacation days"
+                    className="flex h-9 w-9 items-center justify-center rounded-full border border-emerald-200 bg-white text-emerald-900 transition-colors hover:bg-emerald-100"
+                  >
+                    <Plus className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
             </div>
             <div className="rounded-2xl bg-slate-100 p-5">
               <p className="text-sm font-semibold uppercase tracking-wide text-slate-600">
@@ -544,7 +640,7 @@ export default function HomePage() {
               </div>
             </div>
             <p className="text-xs text-gray-500 text-center mt-4">
-              Click Sunday-Thursday and weekday holiday dates to save office attendance in this browser. The monthly target starts at 10 days and drops by 1 for each Sunday-Thursday holiday.
+              Click Sunday-Thursday and weekday holiday dates to save office attendance in this browser. The monthly target starts at 10 days and drops by 1 for each Sunday-Thursday holiday and each vacation day you add for that month.
             </p>
             <p className="text-xs text-gray-500 text-center mt-2">
               Reference date: November 23, 2025 • Pattern repeats every 4 weeks
