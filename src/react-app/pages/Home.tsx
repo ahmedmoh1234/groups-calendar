@@ -334,6 +334,11 @@ export default function HomePage() {
     MONTHLY_OFFICE_TARGET - weekdayHolidayCountThisMonth - vacationsThisMonth
   );
 
+  const showNoDeductionsThisMonth =
+    !holidayFeedError &&
+    weekdayHolidayCountThisMonth === 0 &&
+    vacationsThisMonth === 0;
+
   const remainingOfficeDays = Math.max(
     0,
     adjustedMonthlyOfficeTarget - attendedDaysThisMonth
@@ -490,6 +495,24 @@ export default function HomePage() {
               <p className="mt-2 text-3xl font-bold text-emerald-950">
                 {adjustedMonthlyOfficeTarget} days
               </p>
+              <div className="mt-4 rounded-xl bg-white/70 px-3 py-3 text-sm text-emerald-950">
+                {showNoDeductionsThisMonth ? (
+                  <p className="font-medium">No deductions this month</p>
+                ) : (
+                  <>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">
+                      Deducted this month
+                    </p>
+                    <p className="mt-2 font-medium">
+                      Public holidays:{" "}
+                      {holidayFeedError ? "unavailable" : weekdayHolidayCountThisMonth}
+                    </p>
+                    <p className="mt-1 font-medium">
+                      Vacation days: {vacationsThisMonth}
+                    </p>
+                  </>
+                )}
+              </div>
               <div className="mt-4 flex items-center justify-between gap-3 rounded-xl bg-white/70 px-3 py-2">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">
