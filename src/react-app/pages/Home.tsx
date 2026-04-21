@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, Minus, Plus } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import {
   HolidayFeedSchema,
   type HolidayEntry,
@@ -20,7 +20,7 @@ const PATTERN = [
 
 const MONTHLY_OFFICE_TARGET = 10;
 const ATTENDANCE_STORAGE_KEY = "office-attendance-days";
-const VACATION_STORAGE_KEY = "monthly-vacation-days";
+const VACATION_STORAGE_KEY = "vacation-days";
 const HOLIDAY_FEED_URL = `${import.meta.env.BASE_URL}holidays.json`;
 const CAIRO_TIME_OFFSET_MS = 2 * 60 * 60 * 1000;
 
@@ -53,26 +53,26 @@ const loadAttendance = () => {
 
 const loadVacations = () => {
   if (typeof window === "undefined") {
-    return {} as Record<string, number>;
+    return {} as Record<string, boolean>;
   }
 
   try {
     const stored = window.localStorage.getItem(VACATION_STORAGE_KEY);
 
     if (!stored) {
-      return {} as Record<string, number>;
+      return {} as Record<string, boolean>;
     }
 
     const parsed = JSON.parse(stored);
 
     if (typeof parsed !== "object" || parsed === null) {
-      return {} as Record<string, number>;
+      return {} as Record<string, boolean>;
     }
 
-    return Object.entries(parsed).reduce<Record<string, number>>(
-      (vacations, [monthKey, value]) => {
-        if (typeof value === "number" && Number.isFinite(value) && value >= 0) {
-          vacations[monthKey] = Math.floor(value);
+    return Object.entries(parsed).reduce<Record<string, boolean>>(
+      (vacations, [dateKey, value]) => {
+        if (/^\d{4}-\d{2}-\d{2}$/.test(dateKey) && value === true) {
+          vacations[dateKey] = true;
         }
 
         return vacations;
@@ -80,7 +80,7 @@ const loadVacations = () => {
       {}
     );
   } catch {
-    return {} as Record<string, number>;
+    return {} as Record<string, boolean>;
   }
 };
 
@@ -109,16 +109,16 @@ export default function HomePage() {
   const [attendance, setAttendance] = useState<Record<string, boolean>>(() =>
     loadAttendance()
   );
-  const [vacationsByMonth, setVacationsByMonth] = useState<
-    Record<string, number>
-  >(() => loadVacations());
+  const [vacationDays, setVacationDays] = useState<Record<string, boolean>>(() =>
+    loadVacations()
+  );
+  const [isVacationMode, setIsVacationMode] = useState(false);
   const [holidayFeed, setHolidayFeed] = useState<HolidayFeed | null>(null);
   const [isHolidayFeedLoading, setIsHolidayFeedLoading] = useState(true);
   const [holidayFeedError, setHolidayFeedError] = useState<string | null>(null);
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
-  const monthKey = `${year}-${String(month + 1).padStart(2, "0")}`;
 
   const holidaysByDate = useMemo<Record<string, HolidayEntry[]>>(() => {
     return (holidayFeed?.holidays ?? []).reduce<Record<string, HolidayEntry[]>>(
@@ -193,9 +193,9 @@ export default function HomePage() {
   useEffect(() => {
     window.localStorage.setItem(
       VACATION_STORAGE_KEY,
-      JSON.stringify(vacationsByMonth)
+      JSON.stringify(vacationDays)
     );
-  }, [vacationsByMonth]);
+  }, [vacationDays]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -282,23 +282,56 @@ export default function HomePage() {
         [key]: true,
       };
     });
+
+    setVacationDays((currentVacationDays) => {
+      if (!currentVacationDays[key]) {
+        return currentVacationDays;
+      }
+
+      const nextVacationDays = { ...currentVacationDays };
+      delete nextVacationDays[key];
+      return nextVacationDays;
+    });
   };
 
-  const updateVacationCount = (change: number) => {
-    setVacationsByMonth((currentVacations) => {
-      const nextCount = Math.max(0, (currentVacations[monthKey] ?? 0) + change);
+  const toggleVacation = (date: Date, isHoliday: boolean) => {
+    if (!isSelectableDay(date) || isHoliday) {
+      return;
+    }
 
-      if (nextCount === 0) {
-        const nextVacations = { ...currentVacations };
-        delete nextVacations[monthKey];
-        return nextVacations;
+    const key = getDateKey(date);
+
+    setAttendance((currentAttendance) => {
+      if (!currentAttendance[key]) {
+        return currentAttendance;
+      }
+
+      const nextAttendance = { ...currentAttendance };
+      delete nextAttendance[key];
+      return nextAttendance;
+    });
+
+    setVacationDays((currentVacationDays) => {
+      if (currentVacationDays[key]) {
+        const nextVacationDays = { ...currentVacationDays };
+        delete nextVacationDays[key];
+        return nextVacationDays;
       }
 
       return {
-        ...currentVacations,
-        [monthKey]: nextCount,
+        ...currentVacationDays,
+        [key]: true,
       };
     });
+  };
+
+  const handleDayClick = (date: Date, isHoliday: boolean) => {
+    if (isVacationMode) {
+      toggleVacation(date, isHoliday);
+      return;
+    }
+
+    toggleAttendance(date);
   };
 
   const attendedDaysThisMonth = Object.keys(attendance).filter((dateKey) => {
@@ -327,7 +360,10 @@ export default function HomePage() {
     }
   ).length;
 
-  const vacationsThisMonth = vacationsByMonth[monthKey] ?? 0;
+  const vacationsThisMonth = Object.keys(vacationDays).filter((dateKey) => {
+    const [entryYear, entryMonth] = dateKey.split("-");
+    return Number(entryYear) === year && Number(entryMonth) === month + 1;
+  }).length;
 
   const adjustedMonthlyOfficeTarget = Math.max(
     0,
@@ -362,7 +398,10 @@ export default function HomePage() {
     const isHoliday = holidays.length > 0;
     const dayOfWeek = date.getDay();
     const isSelectable = isSelectableDay(date);
+    const isVacation = Boolean(vacationDays[dateKey]);
+    const isInteractive = isVacationMode ? isSelectable && !isHoliday : isSelectable;
     const isAttended = Boolean(attendance[dateKey]);
+    const isMarked = isAttended || isVacation;
     const isToday = 
       date.getDate() === new Date().getDate() &&
       date.getMonth() === new Date().getMonth() &&
@@ -388,6 +427,12 @@ export default function HomePage() {
       textColor = "text-blue-900";
     }
 
+    if (isVacation) {
+      borderColor = "border-fuchsia-500";
+      bgColor = "bg-fuchsia-100 hover:bg-fuchsia-200";
+      textColor = "text-fuchsia-950";
+    }
+
     if (isAttended) {
       borderColor = "border-emerald-500";
       bgColor =
@@ -407,9 +452,10 @@ export default function HomePage() {
       }),
       isHoliday ? `Holiday: ${holidayNames}` : null,
       group ? `Group ${group}` : "Weekend",
+      isVacation ? "Marked vacation" : null,
       isAttended
         ? "Marked attended"
-        : isSelectable
+        : isInteractive
           ? "Selectable day"
           : "Not selectable",
     ]
@@ -420,13 +466,13 @@ export default function HomePage() {
       <button
         type="button"
         key={day}
-        onClick={() => toggleAttendance(date)}
-        disabled={!isSelectable}
-        aria-pressed={isAttended}
+        onClick={() => handleDayClick(date, isHoliday)}
+        disabled={!isInteractive}
+        aria-pressed={isMarked}
         aria-label={ariaLabel}
         title={isHoliday ? holidayNames : undefined}
         className={`aspect-square rounded-lg border-2 p-2 text-left transition-all ${bgColor} ${textColor} ${borderColor} ${
-          isSelectable ? "cursor-pointer" : "cursor-not-allowed"
+          isInteractive ? "cursor-pointer" : "cursor-not-allowed"
         } ${isToday ? "ring-2 ring-gray-900 ring-offset-2" : ""}`}
       >
           <div className="flex h-full flex-col">
@@ -441,6 +487,11 @@ export default function HomePage() {
                 {isAttended && (
                   <span className="hidden rounded-full bg-white/80 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-gray-800 lg:inline-flex">
                     Attended
+                  </span>
+                )}
+                {isVacation && (
+                  <span className="hidden rounded-full bg-white/80 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-fuchsia-900 lg:inline-flex">
+                    Vacation
                   </span>
                 )}
               </div>
@@ -516,34 +567,27 @@ export default function HomePage() {
               <div className="mt-4 flex items-center justify-between gap-3 rounded-xl bg-white/70 px-3 py-2">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">
-                    Vacations
+                    Vacation mode
                   </p>
                   <p className="text-sm font-medium text-emerald-950">
-                    Deducted this month
+                    {isVacationMode
+                      ? "Click weekdays to mark vacation"
+                      : "Turn on to mark vacation days"}
                   </p>
                 </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => updateVacationCount(-1)}
-                    disabled={vacationsThisMonth === 0}
-                    aria-label="Decrease vacation days"
-                    className="flex h-9 w-9 items-center justify-center rounded-full border border-emerald-200 bg-white text-emerald-900 transition-colors hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    <Minus className="h-4 w-4" />
-                  </button>
-                  <div className="min-w-10 text-center text-lg font-bold text-emerald-950">
-                    {vacationsThisMonth}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => updateVacationCount(1)}
-                    aria-label="Increase vacation days"
-                    className="flex h-9 w-9 items-center justify-center rounded-full border border-emerald-200 bg-white text-emerald-900 transition-colors hover:bg-emerald-100"
-                  >
-                    <Plus className="h-4 w-4" />
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsVacationMode((currentMode) => !currentMode)}
+                  aria-pressed={isVacationMode}
+                  aria-label={isVacationMode ? "Turn vacation mode off" : "Turn vacation mode on"}
+                  className={`inline-flex min-w-20 items-center justify-center rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
+                    isVacationMode
+                      ? "bg-emerald-700 text-white hover:bg-emerald-800"
+                      : "border border-emerald-200 bg-white text-emerald-900 hover:bg-emerald-100"
+                  }`}
+                >
+                  {isVacationMode ? "On" : "Off"}
+                </button>
               </div>
             </div>
             <div className="rounded-2xl bg-slate-100 p-5">
@@ -661,9 +705,15 @@ export default function HomePage() {
                   Marked attended
                 </span>
               </div>
+              <div className="flex min-w-0 items-center gap-2">
+                <div className="h-6 w-6 shrink-0 rounded border-2 border-fuchsia-500 bg-fuchsia-100" />
+                <span className="text-sm font-medium text-gray-700">
+                  Marked vacation
+                </span>
+              </div>
             </div>
             <p className="text-xs text-gray-500 text-center mt-4">
-              Click Sunday-Thursday and weekday holiday dates to save office attendance in this browser. The monthly target starts at 10 days and drops by 1 for each Sunday-Thursday holiday and each vacation day you add for that month.
+              Click Sunday-Thursday and weekday holiday dates to save office attendance in this browser. Turn on Vacation mode to mark Sunday-Thursday dates as vacation. The monthly target starts at 10 days and drops by 1 for each Sunday-Thursday holiday and each day you mark as vacation for that month.
             </p>
             <p className="text-xs text-gray-500 text-center mt-2">
               Reference date: November 23, 2025 • Pattern repeats every 4 weeks
