@@ -463,21 +463,23 @@ export default function HomePage() {
       .join(", ");
 
     calendarDays.push(
-      <button
-        type="button"
-        key={day}
-        onClick={() => handleDayClick(date, isHoliday)}
-        disabled={!isInteractive}
-        aria-pressed={isMarked}
-        aria-label={ariaLabel}
-        title={isHoliday ? holidayNames : undefined}
-        className={`aspect-square rounded-lg border-2 p-2 text-left transition-all ${bgColor} ${textColor} ${borderColor} ${
-          isInteractive ? "cursor-pointer" : "cursor-not-allowed"
-        } ${isToday ? "ring-2 ring-gray-900 ring-offset-2" : ""}`}
-      >
+        <button
+          type="button"
+          key={day}
+          onClick={() => handleDayClick(date, isHoliday)}
+          disabled={!isInteractive}
+          aria-pressed={isMarked}
+          aria-label={ariaLabel}
+          title={isHoliday ? holidayNames : undefined}
+          className={`aspect-square overflow-hidden rounded-lg border-2 p-1 text-left transition-all sm:p-2 ${bgColor} ${textColor} ${borderColor} ${
+            isInteractive ? "cursor-pointer" : "cursor-not-allowed"
+          } ${isToday ? "ring-2 ring-gray-900 ring-offset-2" : ""}`}
+        >
           <div className="flex h-full flex-col">
             <div className="flex items-start justify-between gap-2">
-              <div className="text-sm font-medium">{day}</div>
+              <div className="text-xs font-medium leading-none sm:text-sm">
+                {day}
+              </div>
               <div className="flex flex-wrap items-center justify-end gap-1">
                 {isHoliday && (
                   <span className="hidden rounded-full bg-white/90 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-900 lg:inline-flex">
@@ -524,7 +526,7 @@ export default function HomePage() {
   const monthName = firstDay.toLocaleString("default", { month: "long" });
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-8">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-3 sm:p-6 md:p-8">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="mb-8 text-center">
@@ -537,7 +539,7 @@ export default function HomePage() {
         </div>
 
         {/* Calendar Card */}
-        <div className="bg-white rounded-2xl shadow-xl p-8">
+        <div className="bg-white rounded-2xl shadow-xl p-3 sm:p-6 md:p-8">
           <div className="mb-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <div className="rounded-2xl bg-emerald-50 p-5">
               <p className="text-sm font-semibold uppercase tracking-wide text-emerald-700">
@@ -658,11 +660,11 @@ export default function HomePage() {
           </div>
 
           {/* Day headers */}
-          <div className="grid grid-cols-7 gap-4 mb-4">
+          <div className="mb-4 grid grid-cols-7 gap-1 sm:gap-2 md:gap-4">
             {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
               <div
                 key={day}
-                className="text-center text-sm font-semibold text-gray-600"
+                className="text-center text-xs font-semibold text-gray-600 sm:text-sm"
               >
                 {day}
               </div>
@@ -670,7 +672,7 @@ export default function HomePage() {
           </div>
 
           {/* Calendar Grid */}
-          <div className="grid grid-cols-7 gap-4">{calendarDays}</div>
+          <div className="grid grid-cols-7 gap-1 sm:gap-2 md:gap-4">{calendarDays}</div>
 
           {/* Legend */}
           <div className="mt-8 pt-6 border-t border-gray-200">
